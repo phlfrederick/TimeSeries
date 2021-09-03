@@ -1,0 +1,145 @@
+---
+title: "Forecasting Assignment"
+author: "Phillip Frederick"
+date: "September 18, 2020"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(fpp2)
+library(tidyr)
+library(randtests)
+library('readxl')
+```
+
+```{r}
+df<-read.table('clipboard',sep='\t',header=T,check.names=F)
+
+tidy_df<-df %>% gather(Year,Tourists,"2001":"2013")
+head(tidy_df)
+```
+### Reading in and tidying the data.
+## Question 1 
+```{r}
+options(scipen=5)
+autoplot(ts(tidy_df[,'Tourists'],frequency=12,start=c(2001,1))) +ylab('Tourists')+
+  ggtitle("Annual Number of Tourists (Jan.2001- Jan.2013)")
+```
+
+### The series exhibits a notable trend as well as seasonality. There is an obvious increase in variance with a non-constant mean.
+
+
+## Question 2
+```{r}
+
+df2<-suppressMessages(read_excel('Indian_Holiday_File_Work.xlsx',sheet=2,skip=1))
+colnames(df2)<-c('Year','Ann_Avg_Rate','Ann_Tot_Tourists')
+
+scatter.smooth(x=df2$`Ann_Avg_Rate`,y=df2$Ann_Tot_Tourists,
+               main="Annual Total Tourists versus Annual Avg. Exchange Rate",
+               ylab="Annual Tourist Total",
+               xlab="Average Exchange Rate ($)")
+```
+
+```{r}
+linear_model<-lm(Ann_Tot_Tourists~Ann_Avg_Rate ,data=df2)
+summary(linear_model)
+```
+### The scatterplot highlights that there is no real correlation between annual average exchange rate and annual tourist totals.
+### This is further supported by conducting a simple linear regression and observing the R^2 term which shows that the average annual exchange rate explains only 17.1% of the variability in the annual tourists total. There is no real correlation.
+
+
+## Question 3
+```{r}
+runs.test(tidy_df[,'Tourists'])
+```
+
+### The p-value shows that we should reject the null hypotheisis that the data is random therefore supporting the notion that the data is serially correlated or trended.
+
+## Question 4
+```{r}
+ts_obj<-ts(tidy_df[,'Tourists'],frequency=12,start=c(2001,1))
+
+ggsubseriesplot(ts_obj)+
+  ylab("Foreign Tourist Arrivals");
+
+ggseasonplot(ts_obj,year.labels=TRUE)+
+  ggtitle('Seasonal Plot: Foreign Tourist Arrivals')
+
+```
+
+### The arrival of foreign tourists is infact seasonal. The data confirms information from the case outline. 
+### The warmer months of May thru August showcase lower foreign tourist arrival numbers on average than the cooler months of September thru February with December highlighting the most arrivals.
+### An interesting exception is July which shows a slight uptick in arrivals compared to other warm months.I believe this could be attributed to July being the coolest of the warmer months with an average high of 30.9 degrees celcius.
+
+## Question 5
+
+```{r}
+ggAcf(ts(tidy_df[,'Tourists'],frequency=12,start=c(2001,1)))+ ggtitle('Correlogram')
+```
+
+### The lagged components of the data show that as time progresses less recent values are less influential. 
+### Spikes in the data reference seasonality and the downward, positive progression of correlated lags implies trend.
+### The data is non-stationary and does infact need to be differenced as well as log or square root transformed in order to account for the increasing variance observed.
+### The possible implications of differencing are namely the interpretation of the final results especially in addition to transforming the data. 
+
+
+## Question 6
+
+
+```{r}
+library(urca)
+log_diff<-ts(tidy_df[,"Tourists"],frequency=12,start=c(2001,1)) %>% log() %>% diff(lag=12)
+summary(ur.kpss(log_diff))
+```
+### Log transformation of the data with a difference at lag 12 followed by confirmation of stationarity/non-seasonality using a KPSS test. 
+
+```{r}
+ts_obj %>% log() %>% diff(lag=12)%>%autoplot()+ 
+  ggtitle('Stationary Time Series of Annual Tourist Arrivals (Log Transformed)')
+```
+### Visualization of stationary time series data.
+```{r}
+log_diff%>%ggAcf()
+log_diff%>%ggPacf()
+```
+
+### True significant lags are shown in lags 1,12 and 13 as shown in the partial autocorrelation function plot above. 
+### This is suggestive of a possible AR(3) model.
+```{r}
+fit<-auto.arima(log_diff)
+checkresiduals(fit)
+```
+### The auto ARIMA function found that a model accounting for two lagged autoregressive terms and a MA(1) term associated with the seasonal component is the optimal model choice. 
+
+## Question 7
+```{r}
+fit %>% forecast(h=6) %>% autoplot(include=80) + ylab('Log Transformed')
+```
+
+
+### The forecast demonstrates an uptick in tourist arrivals midway thru the next six months.
+
+## Question 8
+
+```{r}
+par(mfrow=c(1,1))
+plot(forecast(fit))
+lines(fitted(fit))
+```
+
+
+### Judging from the superimposed visualization of the fitted and the actual values of the model it appears that our forecast does a decent job of extrapolating the underlying movement and patterns of our data. 
+
+### Rao should expect to see an overall uptick of foreign tourist arrivals within the next six months. He is best suited to utilize an ARIMA(2,0,0)(0,0,1)[12]
+### model. It should be noted that while the model is accurate, based upon the fitted values chart, the ARIMA model does assume that historical patterns will not change during the forecast period in which case it should not be used as a guaranteed measure. 
+
+### Overall the larger numbers of arrivals can be expected to transpire from December thru February and it should be noted that there is no evidence which suggest a strong correlation between 
+### the annual average exchange rate and the total tourist arrival numbers. 
+
